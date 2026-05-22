@@ -1,0 +1,39 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Current leaderboard standing for each user.
+/// Mirrors the Redis ZSET for persistence and historical queries.
+model LeaderboardEntry {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  score     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([score(sort: Desc)])
+  @@map("leaderboard_entries")
+}
+
+/// Audit trail of all score changes.
+/// Each row records a single delta event for analytics and replay.
+model ScoreHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  delta     Int
+  newScore  Int
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("score_history")
+}
