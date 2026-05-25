@@ -16,7 +16,7 @@ export class LeaderboardService {
     private readonly prismaService: PrismaService,
     private readonly kafkaService: KafkaService,
     private readonly leaderboardGateway: LeaderboardGateway,
-  ) {}
+  ) { }
 
   /**
    * Increment a user's score.
@@ -45,8 +45,14 @@ export class LeaderboardService {
       `Score updated: ${userId} → ${newScore} (rank #${rankData?.rank})`,
     );
 
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+
     const result = new LeaderboardEntryDto({
       userId,
+      username: user?.username,
       score: newScore,
       rank: rankData?.rank ?? 0,
     });
@@ -62,17 +68,46 @@ export class LeaderboardService {
   /**
    * Get the top N users on the leaderboard.
    */
+  private async attachUsernames(
+    entries: Array<{ userId: string; score: number; rank: number }>,
+  ): Promise<LeaderboardEntryDto[]> {
+    if (!entries.length) {
+      return [];
+    }
+
+    const userIds = entries.map((entry) => entry.userId);
+    const users = await this.prismaService.user.findMany({
+      where: {
+        id: { in: userIds },
+      },
+      select: {
+        id: true,
+        username: true,
+      },
+    });
+
+    const usernameMap = new Map(users.map((user) => [user.id, user.username]));
+
+    return entries.map((entry) =>
+      new LeaderboardEntryDto({
+        userId: entry.userId,
+        username: usernameMap.get(entry.userId),
+        score: entry.score,
+        rank: entry.rank,
+      }),
+    );
+  }
+
   async getTopUsers(limit: number = 10): Promise<LeaderboardEntryDto[]> {
     const entries = await this.leaderboardRepo.getTopUsers(limit);
 
-    return entries.map(
-      (entry, index) =>
-        new LeaderboardEntryDto({
-          userId: entry.userId,
-          score: entry.score,
-          rank: index,
-        }),
-    );
+    const leaderboardEntries = entries.map((entry, index) => ({
+      userId: entry.userId,
+      score: entry.score,
+      rank: index,
+    }));
+
+    return this.attachUsernames(leaderboardEntries);
   }
 
   /**
@@ -87,8 +122,14 @@ export class LeaderboardService {
       );
     }
 
+    const users = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { username: true },
+    });
+
     return new LeaderboardEntryDto({
       userId,
+      username: users?.username,
       score: data.score,
       rank: data.rank,
     });
@@ -106,13 +147,6 @@ export class LeaderboardService {
       range,
     );
 
-    return entries.map(
-      (entry) =>
-        new LeaderboardEntryDto({
-          userId: entry.userId,
-          score: entry.score,
-          rank: entry.rank,
-        }),
-    );
+    return this.attachUsernames(entries);
   }
 }
