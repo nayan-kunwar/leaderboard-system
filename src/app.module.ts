@@ -4,6 +4,8 @@ import { RedisModule } from './shared/redis/redis.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { KafkaModule } from './shared/kafka/kafka.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 
     // Feature modules
     LeaderboardModule,
+    AuthModule,
+    UsersModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }

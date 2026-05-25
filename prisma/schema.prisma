@@ -16,6 +16,7 @@ datasource db {
 model LeaderboardEntry {
   id        String   @id @default(uuid())
   userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   score     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -29,6 +30,7 @@ model LeaderboardEntry {
 model ScoreHistory {
   id        String   @id @default(uuid())
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   delta     Int
   newScore  Int
   createdAt DateTime @default(now())
@@ -36,4 +38,18 @@ model ScoreHistory {
   @@index([userId])
   @@index([createdAt])
   @@map("score_history")
+}
+
+/// User details and authentication data
+model User {
+  id                 String             @id @default(uuid())
+  email              String             @unique
+  username           String             @unique
+  passwordHash       String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  leaderboardEntries LeaderboardEntry[]
+  scoreHistories     ScoreHistory[]
+
+  @@map("users")
 }

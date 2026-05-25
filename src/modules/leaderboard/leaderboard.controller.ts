@@ -7,9 +7,13 @@ import {
   Query,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { LeaderboardService } from './leaderboard.service';
 import { UpdateScoreDto, LeaderboardEntryDto } from './dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { Request } from 'express';
 
 @Controller('leaderboard')
 export class LeaderboardController {
@@ -19,13 +23,16 @@ export class LeaderboardController {
    * POST /leaderboard/score
    * Submit or increment a user's score.
    */
+  @UseGuards(JwtAuthGuard)
   @Post('score')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async updateScore(
+    @Req() req: Request,
     @Body() updateScoreDto: UpdateScoreDto,
   ): Promise<LeaderboardEntryDto> {
+    const user = req.user as { id: string; username: string };
     return this.leaderboardService.updateScore(
-      updateScoreDto.userId,
+      user.id,
       updateScoreDto.score,
     );
   }

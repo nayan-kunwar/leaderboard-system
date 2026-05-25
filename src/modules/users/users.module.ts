@@ -1,5 +1,8 @@
-// Users module — placeholder for future implementation
 import { Module } from '@nestjs/common';
+import { UsersService } from './users.service';
 
-@Module({})
+@Module({
+  providers: [UsersService],
+  exports: [UsersService],
+})
 export class UsersModule {}

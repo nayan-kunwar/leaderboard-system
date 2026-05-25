@@ -1,101 +1,74 @@
-# Leaderboard System Walkthrough (Phases 0–4)
+# User & Authentication Flow Walkthrough
 
-I've successfully implemented the foundation and core features of your NestJS + Redis + Kafka Live Leaderboard System. The codebase is now structurally prepared for massive scale.
+I've successfully implemented the real User and Authentication flows using JWT, Passport, and Prisma!
 
 > [!SUCCESS]
-> The build completes successfully without any TypeScript or compilation errors. The Prisma 7 configuration has been fully adapted to the new driver adapter architecture.
+> The Leaderboard REST API is now officially secured. You can no longer artificially inflate scores by passing a random `userId` in the payload; the server now strictly derives your identity from your cryptographic JWT access token.
 
 ---
 
-## 🏗️ What We Built
+## 🏗️ What Was Added
 
-We followed the step-by-step roadmap and implemented the first 5 phases:
+### 1. Database Relations (`schema.prisma`)
+- Created a `User` model with `email`, `username`, and `passwordHash`.
+- Migrated the existing `LeaderboardEntry` and `ScoreHistory` models to have explicit Foreign Key relations to the `User` model, enforcing database-level integrity.
+- Used `onDelete: Cascade` so that if a User is deleted, their scores and history are cleanly removed.
 
-### Phase 0: Project Setup
-- **NestJS Scaffolding:** Bootstrapped a fresh project.
-- **Docker Infrastructure:** Created `docker-compose.yml` with Redis 7, PostgreSQL 16, Zookeeper, and Kafka.
-- **Configuration:** Setup `.env` and the NestJS `ConfigModule` for robust environment variable management.
+### 2. Users Module
+- Added a full `UsersService` that handles `bcrypt` password hashing during registration and ensures `email` / `username` uniqueness.
 
-### Phase 1: Redis Leaderboard Core
-- **Redis Module:** Implemented `RedisService` using `ioredis` with automatic reconnection logic.
-- **Leaderboard Repository:** Created `LeaderboardRepository` encapsulating core Redis Sorted Set (ZSET) operations:
-  - `ZINCRBY` for atomic score increments.
-  - `ZREVRANGE` for retrieving the top N users.
-  - `ZREVRANK` and `ZSCORE` for precise user rankings.
-- **REST API:** Created `LeaderboardController` with `class-validator` validated endpoints:
-  - `POST /leaderboard/score`
-  - `GET /leaderboard/top`
-  - `GET /leaderboard/rank/:userId`
-  - `GET /leaderboard/around/:userId`
+### 3. Authentication Module
+- Wired in `@nestjs/passport` and `@nestjs/jwt`.
+- **Public Endpoints**:
+  - `POST /auth/register`: Creates a new user and returns a signed JWT.
+  - `POST /auth/login`: Validates email/password and returns a signed JWT.
+- **Security**: The `JWT_SECRET` is now correctly loaded from your `.env` file.
 
-### Phase 2: WebSocket Live Updates
-- **Realtime Gateway:** Implemented `LeaderboardGateway` using Socket.IO.
-- **Live Broadcasting:** Hooked into the score update flow to instantly broadcast individual `score.updated` and global `leaderboard.updated` events to all connected clients.
-
-### Phase 3 & 4: Kafka Event Architecture & PostgreSQL Persistence
-- **Prisma 7 Setup:** Configured `PrismaService` with `@prisma/adapter-pg` and defined the `LeaderboardEntry` and `ScoreHistory` models.
-- **Kafka Service:** Created `KafkaService` using `kafkajs` for generic pub/sub capabilities.
-- **Async Workers (Decoupled Persistence):** 
-  - Instead of saving to the database in the main API request (Phase 3's dual-write), the `LeaderboardService` now publishes a `leaderboard.score.updated` event to Kafka.
-  - The `LeaderboardConsumer` worker subscribes to this topic and performs the heavy PostgreSQL upserts asynchronously in the background.
+### 4. Securing the Leaderboard
+- The `UpdateScoreDto` no longer requires `userId`.
+- Added the `@UseGuards(JwtAuthGuard)` to the `POST /leaderboard/score` endpoint. 
+- The endpoint now seamlessly reads `req.user.id` from the Passport JWT strategy.
 
 ---
 
-## 🚀 How to Run and Test
+## 🚀 How to Test
 
-### 1. Start the Infrastructure (Docker)
+You can now test the full flow using standard HTTP clients (like Postman or curl).
 
-Make sure Docker Desktop is running, then spin up the services:
-
-```bash
-docker-compose up -d
-```
-
-This will start:
-- Redis (Port `6379`)
-- PostgreSQL (Port `5432`)
-- Zookeeper (Port `2181`)
-- Kafka (Port `9092`)
-
-### 2. Apply Database Migrations
-
-Before starting the app, push the Prisma schema to your PostgreSQL database:
+### Step 1: Register a New User
 
 ```bash
-npx prisma db push
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"player1", "email":"player1@example.com", "passwordHash":"secretpass"}'
 ```
-*(Using `db push` is great for development. Use `migrate dev` later when you want to track migration files).*
+**Response**: You will receive an `access_token` and user details.
 
-### 3. Start the API Server
+### Step 2: Login (Optional, if you didn't just register)
 
 ```bash
-npm run start:dev
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"player1@example.com", "password":"secretpass"}'
 ```
 
-You should see logs indicating successful connections to Redis, PostgreSQL, and Kafka.
+### Step 3: Update Your Score Securely
 
-### 4. Test the Endpoints
+Copy the `access_token` from Step 1 or 2, and use it in the Authorization header. Notice the body only contains the `score` now!
 
-**Add a Score:**
 ```bash
 curl -X POST http://localhost:3000/leaderboard/score \
   -H "Content-Type: application/json" \
-  -d '{"userId": "user_123", "score": 1500}'
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+  -d '{"score": 500}'
 ```
-
-**Get Top Users:**
-```bash
-curl http://localhost:3000/leaderboard/top?limit=10
-```
-
-> [!TIP]
-> **Testing WebSockets:** You can use tools like [Postman](https://www.postman.com/) or a simple HTML file with the Socket.IO client script to connect to `ws://localhost:3000/leaderboard` and listen for `leaderboard.updated` events when you increment scores!
 
 ---
 
 ## 🔜 Next Steps
 
-The system is currently stable and running smoothly. When you're ready, we can proceed to:
-- **Phase 5 (DDD Refactor):** Splitting the leaderboard module into Domain, Application, and Infrastructure layers.
-- **Phase 6 (Scalability):** Preparing the codebase for Kubernetes deployments and Redis/Kafka clustering.
-- Wiring in actual User/Authentication flows using the placeholder modules we created.
+The backend is now much closer to a production-ready state with Auth in place. The next logical paths based on your previous roadmap would be:
+
+- **DDD Refactor (Phase 5):** Re-architecting the modules into Clean Architecture layers (Domain, Application, Infrastructure).
+- **Scalability (Phase 6):** Preparing for clustering and Kubernetes deployment.
+- **WebSocket Auth:** We can also add a JWT Guard to your Socket.IO gateway if you want to restrict who can listen to live updates.
